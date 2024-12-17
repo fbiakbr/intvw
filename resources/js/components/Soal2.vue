@@ -1,8 +1,6 @@
 <template>
     <div class="p-4">
-        <button class="btn btn-primary" onclick="add_pegawai_modal.showModal()">
-            Tambah
-        </button>
+        <button class="btn btn-primary" @click="clickAddButton">Tambah</button>
         <div class="overflow-x-auto my-4">
             <table class="table">
                 <thead>
@@ -31,7 +29,6 @@
                         <td>
                             <button
                                 class="btn btn-warning"
-                                onclick="update_pegawai_modal.showModal()"
                                 @click="clickUpdateButton(index)"
                             >
                                 Edit</button
@@ -48,8 +45,11 @@
             </table>
         </div>
     </div>
-    <!-- Open the modal using ID.showModal() method -->
-    <dialog id="add_pegawai_modal" class="modal">
+    <dialog
+        id="add_pegawai_modal"
+        class="modal"
+        :class="{ modal: true, 'modal-open': add_pegawai_modal }"
+    >
         <div class="modal-box">
             <div class="divider"></div>
             <label class="form-control">
@@ -62,13 +62,12 @@
                     class="input input-bordered w-full"
                     v-model="form.nama"
                 />
-                <div class="label">
-                    <span
-                        class="label-text-alt text-red-500"
-                        v-if="form.nama.length == 0"
-                        >Nama tidak boleh kosong!!</span
-                    >
-                </div>
+                <span
+                    v-for="error in v$.nama.$errors"
+                    :key="error.$uid"
+                    class="text-red-500"
+                    >{{ error.$message }}</span
+                >
             </label>
             <label class="form-control">
                 <div class="label">
@@ -80,6 +79,12 @@
                     class="input input-bordered w-full"
                     v-model="form.nip"
                 />
+                <span
+                    v-for="error in v$.nip.$errors"
+                    :key="error.$uid"
+                    class="text-red-500"
+                    >{{ error.$message }}</span
+                >
             </label>
             <label class="form-control">
                 <div class="label">
@@ -93,6 +98,12 @@
                     <option value="LAKI-LAKI">LAKI-LAKI</option>
                     <option value="PEREMPUAN">PEREMPUAN</option>
                 </select>
+                <span
+                    v-for="error in v$.jenis_kelamin.$errors"
+                    :key="error.$uid"
+                    class="text-red-500"
+                    >{{ error.$message }}</span
+                >
             </label>
             <label class="form-control">
                 <div class="label">
@@ -104,6 +115,12 @@
                     class="input input-bordered w-full"
                     v-model="form.tanggal_lahir"
                 />
+                <span
+                    v-for="error in v$.tanggal_lahir.$errors"
+                    :key="error.$uid"
+                    class="text-red-500"
+                    >{{ error.$message }}</span
+                >
             </label>
             <label class="form-control">
                 <div class="label">
@@ -118,6 +135,12 @@
                     <option value="SEKRETARIS">SEKRETARIS</option>
                     <option value="STAFF">STAFF</option>
                 </select>
+                <span
+                    v-for="error in v$.jabatan.$errors"
+                    :key="error.$uid"
+                    class="text-red-500"
+                    >{{ error.$message }}</span
+                >
             </label>
             <label class="form-control">
                 <div class="label">
@@ -131,17 +154,19 @@
                     <option value="IT">IT</option>
                     <option value="NON_IT">NON IT</option>
                 </select>
+                <span
+                    v-for="error in v$.unit_kerja.$errors"
+                    :key="error.$uid"
+                    class="text-red-500"
+                    >{{ error.$message }}</span
+                >
             </label>
             <div class="divider"></div>
             <div class="flex justify-between">
-                <button class="btn" onclick="add_pegawai_modal.close()">
+                <button class="btn" @click="closeAddModal" type="button">
                     Close
                 </button>
-                <button
-                    class="btn btn-primary"
-                    @click="onSubmit()"
-                    onclick="add_pegawai_modal.close()"
-                >
+                <button class="btn btn-primary" type="button" @click="onSubmit">
                     Tambah
                 </button>
             </div>
@@ -170,7 +195,11 @@
             </div>
         </div>
     </dialog>
-    <dialog id="update_pegawai_modal" class="modal">
+    <dialog
+        id="update_pegawai_modal"
+        class="modal"
+        :class="{ modal: true, 'modal-open': update_pegawai_modal }"
+    >
         <div class="modal-box">
             <h1>Update Pegawai</h1>
             <div class="divider"></div>
@@ -249,25 +278,30 @@
             </label>
             <div class="divider"></div>
             <div class="flex justify-between">
-                <button class="btn" onclick="update_pegawai_modal.close()">
+                <button class="btn" @click="closeUpdateModal" type="button">
                     Close
                 </button>
                 <button
                     class="btn btn-primary"
                     @click="updatePegawai(selectedPegawaiIndex.toString())"
-                    onclick="update_pegawai_modal.close()"
+                    type="button"
                 >
                     Update
                 </button>
             </div>
         </div>
     </dialog>
+    <button @click="logErrors" class="btn btn-warning">Log Errors</button>
 </template>
 
 <script setup>
-import { ref, onMounted } from "vue";
+import { ref, onMounted, reactive, computed } from "vue";
+import useVuelidate from "@vuelidate/core";
+import { required, minLength } from "@vuelidate/validators";
 import axios from "axios";
 let data_pegawai = ref([]);
+let add_pegawai_modal = ref(false);
+let update_pegawai_modal = ref(false);
 let selectedPegawaiIndex = ref(0);
 let form = ref({
     nama: "",
@@ -277,7 +311,7 @@ let form = ref({
     jabatan: "",
     unit_kerja: "",
 });
-let update_form = ref({
+let update_form = reactive({
     nama: "",
     nip: "",
     jenis_kelamin: "",
@@ -285,26 +319,57 @@ let update_form = ref({
     jabatan: "",
     unit_kerja: "",
 });
+const validationRules = computed(() => {
+    return {
+        nama: { required, minLength: minLength(5) },
+        nip: { required },
+        jenis_kelamin: { required },
+        tanggal_lahir: { required },
+        jabatan: { required },
+        unit_kerja: { required },
+    };
+});
+
+const v$ = useVuelidate(validationRules, form.value);
 
 onMounted(() => {
     getDataPegawai();
 });
 
 const onSubmit = async () => {
-    try {
+    const isFormCorrect = await v$.value.$validate();
+    if (!isFormCorrect) {
+        return;
+    } else {
         await axios.post("/api/pegawai", form.value);
-        form.value = {
-            nama: "",
-            nip: "",
-            jenis_kelamin: "",
-            tanggal_lahir: "",
-            jabatan: "",
-            unit_kerja: "",
-        };
+        add_pegawai_modal.value = !add_pegawai_modal.value;
+        resetAllForm();
         getDataPegawai();
-    } catch (error) {
-        console.error("Error submitting the form:", error);
     }
+};
+
+const resetAllForm = () => {
+    form.value = {
+        nama: "",
+        nip: "",
+        jenis_kelamin: "",
+        tanggal_lahir: "",
+        unit_kerja: "",
+        jabatan: "",
+    };
+    update_form = {
+        nama: "",
+        nip: "",
+        jenis_kelamin: "",
+        tanggal_lahir: "",
+        jabatan: "",
+        unit_kerja: "",
+    };
+};
+
+const clickAddButton = () => {
+    v$.value.$reset;
+    add_pegawai_modal.value = true;
 };
 
 const clickDeleteButton = (id) => {
@@ -313,7 +378,19 @@ const clickDeleteButton = (id) => {
 
 const clickUpdateButton = (id) => {
     selectedPegawaiIndex.value = id;
-    update_form.value = { ...data_pegawai.value[id] };
+    update_form = { ...data_pegawai.value[id] };
+    update_pegawai_modal.value = true;
+};
+
+const closeAddModal = () => {
+    add_pegawai_modal.value = false;
+    resetAllForm();
+    v$.value.$reset();
+};
+
+const closeUpdateModal = () => {
+    update_pegawai_modal.value = false;
+    resetAllForm();
 };
 
 const deletePegawai = async (index) => {
@@ -324,22 +401,19 @@ const deletePegawai = async (index) => {
 
 const updatePegawai = async (index) => {
     const id = data_pegawai.value[index].id;
-    await axios.put(`/api/pegawai/${id}`, update_form.value);
+    await axios.put(`/api/pegawai/${id}`, update_form);
+    update_pegawai_modal.value = false;
+    resetAllForm();
     getDataPegawai();
-    update_form.value = {
-        nama: "",
-        nip: "",
-        jenis_kelamin: "",
-        tanggal_lahir: "",
-        jabatan: "",
-        unit_kerja: "",
-    };
 };
 
 const getDataPegawai = async () => {
     data_pegawai.value = [];
     const response = await axios.get("/api/pegawai");
-    console.log(response.data);
     data_pegawai.value = response.data;
+};
+
+const logErrors = () => {
+    console.log(v$.value.$errors);
 };
 </script>
